@@ -36,8 +36,9 @@
   <script>
     const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxEXZJdCd4Me6JLLRcQLXVoXPsyciU2HcZKt67iu0hdJPyZ1gfxgHKHWMpgYpvK_7oS/exec"; 
 
-    // AAPKE AUTHORIZED PARTS KI LIST (Yahan aap apne aur bhi part numbers add kar sakte hain)
+    // AAPKE AUTHORIZED PARTS KI LIST (Yahan aap aur bhi part numbers add kar sakte hain)
     const validPartNumbers = [
+      "203529021832",
       "203529921699",
       "203039821166",
       "20352982169",
@@ -80,7 +81,7 @@
         toggleBtn.innerText = "STOP AUTO SCAN";
         toggleBtn.classList.add('active');
         statusDiv.innerText = "Auto Scanning Started...";
-        scanInterval = setInterval(captureAndScan, 3000); // Har 3 second me automatic scan karega
+        scanInterval = setInterval(captureAndScan, 3000);
       } else {
         toggleBtn.innerText = "START AUTO SCAN";
         toggleBtn.classList.remove('active');
@@ -121,12 +122,13 @@
     }
 
     function matchWithAuthorizedList(fullText) {
+      // Text ko clean karein taaki sirf numbers bachein
       let cleanedText = fullText.replace(/[^0-9]/g, '');
       
-      // Check karein ki scanned text me hamari authorized list ka koi part number poora match karta hai ya nahi
+      // Check karein ki list ka kaunsa part number is text ke andar aa raha hai
       for (let partNo of validPartNumbers) {
         if (cleanedText.includes(partNo)) {
-          return partNo;
+          return partNo; // Hamesha exact authorized clean number return karega
         }
       }
       return null;
@@ -139,11 +141,10 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ partNumber: partNumber })
       }).then(() => {
-        statusDiv.innerText = "✅ Saved: " + partNumber;
+        statusDiv.innerText = "✅ Saved/Updated: " + partNumber;
         playBeep();
         lastScannedDiv.innerHTML = "Last Entry: <strong>" + partNumber + " (Qty Updated)</strong>";
         
-        // 2 second ka gap dekar agla scan resume karein
         setTimeout(() => {
           isProcessing = false;
         }, 2000);
