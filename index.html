@@ -55,13 +55,13 @@
 
       Tesseract.recognize(canvas, 'eng')
         .then(({ data: { text } }) => {
-          let pureNumber = extractPureNumber(text);
+          let exactPartNo = extractStrictPartNumber(text);
           
-          if (pureNumber) {
-            statusDiv.innerText = "Found: " + pureNumber + " | Saving...";
-            saveToGoogleSheet(pureNumber);
+          if (exactPartNo) {
+            statusDiv.innerText = "Found: " + exactPartNo + " | Saving...";
+            saveToGoogleSheet(exactPartNo);
           } else {
-            statusDiv.innerText = "Sirf Number Read Nahi Hua! Dobara koshish karein.";
+            statusDiv.innerText = "Part Number Match Nahi Hua! Dubara Try Karein.";
           }
         })
         .catch(err => {
@@ -69,31 +69,37 @@
         });
     }
 
-    function extractPureNumber(fullText) {
+    function extractStrictPartNumber(fullText) {
       let lines = fullText.split('\n');
       
-      // 1. Pehle dekhein agar kisi line me "PART NO" likha ho, uske aage ka number nikalein
+      // 1. Sabse pehle check karein agar kisi line me explicitly "PART NO" ya "PART" likha ho
       for (let line of lines) {
-        if (/part\s*no/i.test(line)) {
-          let digits = line.replace(/[^0-9]/g, '');
-          if (digits.length >= 5) return digits;
+        if (/part\s*(no|number)?/i.test(line)) {
+          let clean = line.replace(/part\s*(no|number)\.?/i, '').replace(/[^0-9]/g, '').trim();
+          if (clean.length >= 5) return clean;
         }
       }
 
-      // 2. Agar "PART NO" text match na ho, toh aisi line dhundhein jisme sirf ya mukhyatah numbers hon (jaise 6 se 12 digits ka part number)
+      // 2. Agar "PART NO" nahi mila, toh aisi line talashe jo standard part numbers ki tarah ho (e.g. 10 to 12 digits, jaise 261706024 ya 203529021832)
+      let candidateNumbers = [];
       for (let line of lines) {
         let cleanLine = line.trim();
         
-        // Address, pin codes (jaise 603104), years ya phone numbers ko skip karein
-        if (/road|tamil|nadu|india|limited|private|manager|address|card|warranty|month|year|incl|tax|telephone|email|tcassembly|603104/i.test(cleanLine)) {
+        // Faltu text wale words ko ignore karein
+        if (/warranty|card|tcassembly|assembly|turbo|encrgy|private|limited|manager|address|road|tamil|nadu|india|month|year|incl|tax|telephone|email/i.test(cleanLine)) {
           continue;
         }
 
         let digits = cleanLine.replace(/[^0-9]/g, '');
-        // Agar number 6 se 14 lambai ka hai toh yahi part number hoga
-        if (digits.length >= 6 && digits.length <= 14) {
-          return digits;
+        // Automotive part numbers aam taur par 8 se 13 digits ke hote hain
+        if (digits.length >= 8 && digits.length <= 13) {
+          candidateNumbers.push(digits);
         }
+      }
+
+      // Agar koi valid number milta hai toh pehla wala return kar dein
+      if (candidateNumbers.length > 0) {
+        return candidateNumbers[0];
       }
 
       return null;
