@@ -13,34 +13,46 @@
     video { width: 100%; height: auto; display: block; }
     .scan-box { position: absolute; top: 35%; left: 10%; width: 80%; height: 30%; border: 2px dashed #00ff22; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5); border-radius: 8px; }
     #status { margin-top: 10px; font-weight: bold; font-size: 16px; color: #2b6cb0; min-height: 25px; }
-    .btn { background: #2b6cb0; color: white; border: none; padding: 14px 25px; font-size: 17px; font-weight: bold; border-radius: 8px; margin-top: 10px; width: 85%; max-width: 320px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-    .btn:active { background: #2c5282; transform: scale(0.98); }
+    .btn { background: #e53e3e; color: white; border: none; padding: 12px 25px; font-size: 16px; font-weight: bold; border-radius: 8px; margin-top: 10px; width: 85%; max-width: 320px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .btn.active { background: #38a169; }
     #last-scanned { margin-top: 15px; font-size: 15px; color: #2d3748; background: #fff; padding: 10px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: inline-block; width: 80%; }
   </style>
 </head>
 <body>
 
   <h2>SANTOSH DIESEL & TURBO</h2>
-  <p>Part Number ko green box ke andar rakhein</p>
+  <p>Auto-Scan Mode: Part ko green box me rakhein</p>
 
   <div id="video-container">
     <video id="webcam" autoplay playsinline></video>
     <div class="scan-box"></div>
   </div>
 
-  <button class="btn" onclick="captureAndScan()">SCAN PART NUMBER</button>
+  <button id="toggle-btn" class="btn" onclick="toggleAutoScan()">START AUTO SCAN</button>
   
-  <div id="status">Ready To Scan</div>
+  <div id="status">Status: Stopped</div>
   <div id="last-scanned">Last Entry: <strong>None</strong></div>
 
   <script>
     const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxEXZJdCd4Me6JLLRcQLXVoXPsyciU2HcZKt67iu0hdJPyZ1gfxgHKHWMpgYpvK_7oS/exec"; 
 
+    // AAPKE AUTHORIZED PARTS KI LIST (Yahan aap apne aur bhi part numbers add kar sakte hain)
+    const validPartNumbers = [
+      "203529921699",
+      "203039821166",
+      "20352982169",
+      "261706024"
+    ];
+
     const video = document.getElementById('webcam');
     const statusDiv = document.getElementById('status');
     const lastScannedDiv = document.getElementById('last-scanned');
+    const toggleBtn = document.getElementById('toggle-btn');
 
-    // Beep sound function
+    let isScanning = false;
+    let scanInterval = null;
+    let isProcessing = false;
+
     function playBeep() {
       try {
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -62,8 +74,26 @@
       .then(stream => { video.srcObject = stream; })
       .catch(err => { statusDiv.innerText = "Camera Permission Denied"; });
 
+    function toggleAutoScan() {
+      isScanning = !isScanning;
+      if (isScanning) {
+        toggleBtn.innerText = "STOP AUTO SCAN";
+        toggleBtn.classList.add('active');
+        statusDiv.innerText = "Auto Scanning Started...";
+        scanInterval = setInterval(captureAndScan, 3000); // Har 3 second me automatic scan karega
+      } else {
+        toggleBtn.innerText = "START AUTO SCAN";
+        toggleBtn.classList.remove('active');
+        statusDiv.innerText = "Status: Stopped";
+        clearInterval(scanInterval);
+      }
+    }
+
     async function captureAndScan() {
-      statusDiv.innerText = "Fast Scanning...";
+      if (isProcessing || !isScanning) return;
+      isProcessing = true;
+      
+      statusDiv.innerText = "Scanning frame...";
       
       const canvas = document.createElement('canvas');
       canvas.width = video.videoWidth;
@@ -73,34 +103,30 @@
 
       Tesseract.recognize(canvas, 'eng')
         .then(({ data: { text } }) => {
-          let partNo = extractCleanPartNumber(text);
+          let matchedPart = matchWithAuthorizedList(text);
           
-          if (partNo) {
-            statusDiv.innerText = "Found: " + partNo + " | Saving...";
+          if (matchedPart) {
+            statusDiv.innerText = "Matched: " + matchedPart + " | Saving...";
             playBeep();
-            saveToGoogleSheet(partNo);
+            saveToGoogleSheet(matchedPart);
           } else {
-            statusDiv.innerText = "Number theek se nahi aaya, fir se karein.";
+            statusDiv.innerText = "Searching valid part...";
+            isProcessing = false;
           }
         })
         .catch(err => {
-          statusDiv.innerText = "Scan Error";
+          statusDiv.innerText = "Scanning...";
+          isProcessing = false;
         });
     }
 
-    function extractCleanPartNumber(fullText) {
-      let lines = fullText.split('\n');
+    function matchWithAuthorizedList(fullText) {
+      let cleanedText = fullText.replace(/[^0-9]/g, '');
       
-      for (let line of lines) {
-        let clean = line.replace(/[^a-zA-Z0-9-]/g, '').trim();
-        
-        if (/warranty|card|tcassembly|assembly|turbo|encrgy|private|limited|manager|address|road|tamil|nadu|india|month|year|incl|tax|telephone|email/i.test(clean)) {
-          continue;
-        }
-
-        let digitsOnly = clean.replace(/[^0-9]/g, '');
-        if (digitsOnly.length >= 6 && digitsOnly.length <= 14) {
-          return clean;
+      // Check karein ki scanned text me hamari authorized list ka koi part number poora match karta hai ya nahi
+      for (let partNo of validPartNumbers) {
+        if (cleanedText.includes(partNo)) {
+          return partNo;
         }
       }
       return null;
@@ -113,11 +139,17 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ partNumber: partNumber })
       }).then(() => {
-        statusDiv.innerText = "✅ Saved Successfully!";
+        statusDiv.innerText = "✅ Saved: " + partNumber;
         playBeep();
-        lastScannedDiv.innerHTML = "Last Entry: <strong>" + partNumber + " (Auto Qty Updated)</strong>";
+        lastScannedDiv.innerHTML = "Last Entry: <strong>" + partNumber + " (Qty Updated)</strong>";
+        
+        // 2 second ka gap dekar agla scan resume karein
+        setTimeout(() => {
+          isProcessing = false;
+        }, 2000);
       }).catch(err => {
         statusDiv.innerText = "❌ Save Failed";
+        isProcessing = false;
       });
     }
   </script>
