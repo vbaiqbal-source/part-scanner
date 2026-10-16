@@ -55,13 +55,13 @@
 
       Tesseract.recognize(canvas, 'eng')
         .then(({ data: { text } }) => {
-          let exactPartNo = extractStrictPartNumber(text);
+          let exactPartNo = extractOnlyPartNumber(text);
           
           if (exactPartNo) {
             statusDiv.innerText = "Found: " + exactPartNo + " | Saving...";
             saveToGoogleSheet(exactPartNo);
           } else {
-            statusDiv.innerText = "Part Number Match Nahi Hua! Dubara Try Karein.";
+            statusDiv.innerText = "Part Number Saaf nahi dikha! Box me thik se rakhein.";
           }
         })
         .catch(err => {
@@ -69,37 +69,25 @@
         });
     }
 
-    function extractStrictPartNumber(fullText) {
+    function extractOnlyPartNumber(fullText) {
       let lines = fullText.split('\n');
       
-      // 1. Sabse pehle check karein agar kisi line me explicitly "PART NO" ya "PART" likha ho
-      for (let line of lines) {
-        if (/part\s*(no|number)?/i.test(line)) {
-          let clean = line.replace(/part\s*(no|number)\.?/i, '').replace(/[^0-9]/g, '').trim();
-          if (clean.length >= 5) return clean;
-        }
-      }
-
-      // 2. Agar "PART NO" nahi mila, toh aisi line talashe jo standard part numbers ki tarah ho (e.g. 10 to 12 digits, jaise 261706024 ya 203529021832)
-      let candidateNumbers = [];
+      // Har line ko check karein aur unwanted words hata dein
       for (let line of lines) {
         let cleanLine = line.trim();
         
-        // Faltu text wale words ko ignore karein
-        if (/warranty|card|tcassembly|assembly|turbo|encrgy|private|limited|manager|address|road|tamil|nadu|india|month|year|incl|tax|telephone|email/i.test(cleanLine)) {
+        // Agar line me yeh words hain toh use turant skip kar dein
+        if (/warranty|card|tcassembly|assembly|turbo|encrgy|private|limited|manager|address|road|tamil|nadu|india|month|year|incl|tax|telephone|email|ipaew|details|duly|filled/i.test(cleanLine)) {
           continue;
         }
 
+        // Line me se sirf numbers nikalein
         let digits = cleanLine.replace(/[^0-9]/g, '');
-        // Automotive part numbers aam taur par 8 se 13 digits ke hote hain
+        
+        // Agar numbers ki lambai 8 se 13 ke beech hai, toh wahi hamara part number hai
         if (digits.length >= 8 && digits.length <= 13) {
-          candidateNumbers.push(digits);
+          return digits;
         }
-      }
-
-      // Agar koi valid number milta hai toh pehla wala return kar dein
-      if (candidateNumbers.length > 0) {
-        return candidateNumbers[0];
       }
 
       return null;
