@@ -55,13 +55,13 @@
 
       Tesseract.recognize(canvas, 'eng')
         .then(({ data: { text } }) => {
-          let partNumber = extractPartNumber(text);
+          let pureNumber = extractPureNumber(text);
           
-          if (partNumber) {
-            statusDiv.innerText = "Found: " + partNumber + " | Saving...";
-            saveToGoogleSheet(partNumber);
+          if (pureNumber) {
+            statusDiv.innerText = "Found: " + pureNumber + " | Saving...";
+            saveToGoogleSheet(pureNumber);
           } else {
-            statusDiv.innerText = "Part No. Nahi Mila! Box me theek se rakhein.";
+            statusDiv.innerText = "Sirf Number Read Nahi Hua! Dobara koshish karein.";
           }
         })
         .catch(err => {
@@ -69,30 +69,30 @@
         });
     }
 
-    function extractPartNumber(fullText) {
+    function extractPureNumber(fullText) {
       let lines = fullText.split('\n');
       
-      // 1. Pehle check karein agar kisi line me "PART NO" likha ho
+      // 1. Pehle dekhein agar kisi line me "PART NO" likha ho, uske aage ka number nikalein
       for (let line of lines) {
         if (/part\s*no/i.test(line)) {
-          let cleaned = line.replace(/part\s*no\.?/i, '').replace(/[^a-zA-Z0-9-]/g, '').trim();
-          if (cleaned.length > 3) return cleaned;
+          let digits = line.replace(/[^0-9]/g, '');
+          if (digits.length >= 5) return digits;
         }
       }
 
-      // 2. Agar "PART NO" text nahi mila, toh aisi line dhundhe jo address ya company name na ho aur jisme numbers hon
+      // 2. Agar "PART NO" text match na ho, toh aisi line dhundhein jisme sirf ya mukhyatah numbers hon (jaise 6 se 12 digits ka part number)
       for (let line of lines) {
         let cleanLine = line.trim();
         
-        // Address aur company ke common words ko ignore karein
-        if (/road|tamil|nadu|india|limited|private|manager|address|card|warranty|month|year|incl|tax|telephone|email|tcassembly/i.test(cleanLine)) {
+        // Address, pin codes (jaise 603104), years ya phone numbers ko skip karein
+        if (/road|tamil|nadu|india|limited|private|manager|address|card|warranty|month|year|incl|tax|telephone|email|tcassembly|603104/i.test(cleanLine)) {
           continue;
         }
-        
-        // Agar line me acche khase digits/numbers hain (e.g. 5 ya usse zyada digits)
-        let digitsOnly = cleanLine.replace(/[^0-9]/g, '');
-        if (digitsOnly.length >= 5 && cleanLine.length <= 15) {
-          return cleanLine.replace(/[^a-zA-Z0-9\s-]/g, '').trim();
+
+        let digits = cleanLine.replace(/[^0-9]/g, '');
+        // Agar number 6 se 14 lambai ka hai toh yahi part number hoga
+        if (digits.length >= 6 && digits.length <= 14) {
+          return digits;
         }
       }
 
