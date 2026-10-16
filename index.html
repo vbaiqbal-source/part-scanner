@@ -55,18 +55,48 @@
 
       Tesseract.recognize(canvas, 'eng')
         .then(({ data: { text } }) => {
-          let cleanedText = text.replace(/[^a-zA-Z0-9\s-]/g, '').trim();
+          let partNumber = extractPartNumber(text);
           
-          if (cleanedText.length > 2) {
-            statusDiv.innerText = "Found: " + cleanedText + " | Saving...";
-            saveToGoogleSheet(cleanedText);
+          if (partNumber) {
+            statusDiv.innerText = "Found: " + partNumber + " | Saving...";
+            saveToGoogleSheet(partNumber);
           } else {
-            statusDiv.innerText = "Text Read Nahi Hua! Re-try karein.";
+            statusDiv.innerText = "Part No. Nahi Mila! Box me theek se rakhein.";
           }
         })
         .catch(err => {
           statusDiv.innerText = "Scanning Error";
         });
+    }
+
+    function extractPartNumber(fullText) {
+      let lines = fullText.split('\n');
+      
+      // 1. Pehle check karein agar kisi line me "PART NO" likha ho
+      for (let line of lines) {
+        if (/part\s*no/i.test(line)) {
+          let cleaned = line.replace(/part\s*no\.?/i, '').replace(/[^a-zA-Z0-9-]/g, '').trim();
+          if (cleaned.length > 3) return cleaned;
+        }
+      }
+
+      // 2. Agar "PART NO" text nahi mila, toh aisi line dhundhe jo address ya company name na ho aur jisme numbers hon
+      for (let line of lines) {
+        let cleanLine = line.trim();
+        
+        // Address aur company ke common words ko ignore karein
+        if (/road|tamil|nadu|india|limited|private|manager|address|card|warranty|month|year|incl|tax|telephone|email|tcassembly/i.test(cleanLine)) {
+          continue;
+        }
+        
+        // Agar line me acche khase digits/numbers hain (e.g. 5 ya usse zyada digits)
+        let digitsOnly = cleanLine.replace(/[^0-9]/g, '');
+        if (digitsOnly.length >= 5 && cleanLine.length <= 15) {
+          return cleanLine.replace(/[^a-zA-Z0-9\s-]/g, '').trim();
+        }
+      }
+
+      return null;
     }
 
     function saveToGoogleSheet(partNumber) {
