@@ -7,21 +7,21 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
   <style>
     body { font-family: Arial, sans-serif; text-align: center; background: #f0f2f5; margin: 0; padding: 15px; }
-    h2 { color: #1a365d; margin-bottom: 5px; }
-    p { color: #4a5568; font-size: 14px; }
-    #video-container { position: relative; width: 100%; max-width: 380px; margin: 15px auto; border: 3px solid #2b6cb0; border-radius: 12px; overflow: hidden; background: #000; }
+    h2 { color: #1a365d; margin-bottom: 5px; font-size: 20px; }
+    p { color: #4a5568; font-size: 13px; }
+    #video-container { position: relative; width: 100%; max-width: 380px; margin: 10px auto; border: 3px solid #2b6cb0; border-radius: 12px; overflow: hidden; background: #000; }
     video { width: 100%; height: auto; display: block; }
     .scan-box { position: absolute; top: 35%; left: 10%; width: 80%; height: 30%; border: 2px dashed #00ff22; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5); border-radius: 8px; }
-    #status { margin-top: 15px; font-weight: bold; font-size: 18px; color: #2b6cb0; min-height: 25px; }
-    .btn { background: #2b6cb0; color: white; border: none; padding: 15px 30px; font-size: 18px; font-weight: bold; border-radius: 8px; margin-top: 15px; width: 85%; max-width: 320px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    #status { margin-top: 10px; font-weight: bold; font-size: 16px; color: #2b6cb0; min-height: 25px; }
+    .btn { background: #2b6cb0; color: white; border: none; padding: 14px 25px; font-size: 17px; font-weight: bold; border-radius: 8px; margin-top: 10px; width: 85%; max-width: 320px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
     .btn:active { background: #2c5282; transform: scale(0.98); }
-    #last-scanned { margin-top: 20px; font-size: 16px; color: #2d3748; background: #fff; padding: 12px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: inline-block; width: 80%; }
+    #last-scanned { margin-top: 15px; font-size: 15px; color: #2d3748; background: #fff; padding: 10px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: inline-block; width: 80%; }
   </style>
 </head>
 <body>
 
   <h2>SANTOSH DIESEL & TURBO</h2>
-  <p>Part Number ko green box ke andar rakhein aur Scan karein</p>
+  <p>Part Number ko green box ke andar rakhein</p>
 
   <div id="video-container">
     <video id="webcam" autoplay playsinline></video>
@@ -40,12 +40,30 @@
     const statusDiv = document.getElementById('status');
     const lastScannedDiv = document.getElementById('last-scanned');
 
+    // Beep sound function
+    function playBeep() {
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(800, audioCtx.currentTime);
+        gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        oscillator.start();
+        oscillator.stop(audioCtx.currentTime + 0.15);
+      } catch (e) {
+        console.log("Audio error:", e);
+      }
+    }
+
     navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
       .then(stream => { video.srcObject = stream; })
       .catch(err => { statusDiv.innerText = "Camera Permission Denied"; });
 
     async function captureAndScan() {
-      statusDiv.innerText = "Scanning Text...";
+      statusDiv.innerText = "Fast Scanning...";
       
       const canvas = document.createElement('canvas');
       canvas.width = video.videoWidth;
@@ -55,41 +73,36 @@
 
       Tesseract.recognize(canvas, 'eng')
         .then(({ data: { text } }) => {
-          let exactPartNo = extractOnlyPartNumber(text);
+          let partNo = extractCleanPartNumber(text);
           
-          if (exactPartNo) {
-            statusDiv.innerText = "Found: " + exactPartNo + " | Saving...";
-            saveToGoogleSheet(exactPartNo);
+          if (partNo) {
+            statusDiv.innerText = "Found: " + partNo + " | Saving...";
+            playBeep();
+            saveToGoogleSheet(partNo);
           } else {
-            statusDiv.innerText = "Part Number Saaf nahi dikha! Box me thik se rakhein.";
+            statusDiv.innerText = "Number theek se nahi aaya, fir se karein.";
           }
         })
         .catch(err => {
-          statusDiv.innerText = "Scanning Error";
+          statusDiv.innerText = "Scan Error";
         });
     }
 
-    function extractOnlyPartNumber(fullText) {
+    function extractCleanPartNumber(fullText) {
       let lines = fullText.split('\n');
       
-      // Har line ko check karein aur unwanted words hata dein
       for (let line of lines) {
-        let cleanLine = line.trim();
+        let clean = line.replace(/[^a-zA-Z0-9-]/g, '').trim();
         
-        // Agar line me yeh words hain toh use turant skip kar dein
-        if (/warranty|card|tcassembly|assembly|turbo|encrgy|private|limited|manager|address|road|tamil|nadu|india|month|year|incl|tax|telephone|email|ipaew|details|duly|filled/i.test(cleanLine)) {
+        if (/warranty|card|tcassembly|assembly|turbo|encrgy|private|limited|manager|address|road|tamil|nadu|india|month|year|incl|tax|telephone|email/i.test(clean)) {
           continue;
         }
 
-        // Line me se sirf numbers nikalein
-        let digits = cleanLine.replace(/[^0-9]/g, '');
-        
-        // Agar numbers ki lambai 8 se 13 ke beech hai, toh wahi hamara part number hai
-        if (digits.length >= 8 && digits.length <= 13) {
-          return digits;
+        let digitsOnly = clean.replace(/[^0-9]/g, '');
+        if (digitsOnly.length >= 6 && digitsOnly.length <= 14) {
+          return clean;
         }
       }
-
       return null;
     }
 
@@ -101,7 +114,8 @@
         body: JSON.stringify({ partNumber: partNumber })
       }).then(() => {
         statusDiv.innerText = "✅ Saved Successfully!";
-        lastScannedDiv.innerHTML = "Last Entry: <strong>" + partNumber + " (Qty: 1)</strong>";
+        playBeep();
+        lastScannedDiv.innerHTML = "Last Entry: <strong>" + partNumber + " (Auto Qty Updated)</strong>";
       }).catch(err => {
         statusDiv.innerText = "❌ Save Failed";
       });
