@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Santosh Diesel - Part Scanner</title>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; background: #f0f2f5; margin: 0; padding: 15px; }
+    h2 { color: #1a365d; margin-bottom: 5px; }
+    p { color: #4a5568; font-size: 14px; }
+    #video-container { position: relative; width: 100%; max-width: 380px; margin: 15px auto; border: 3px solid #2b6cb0; border-radius: 12px; overflow: hidden; background: #000; }
+    video { width: 100%; height: auto; display: block; }
+    .scan-box { position: absolute; top: 35%; left: 10%; width: 80%; height: 30%; border: 2px dashed #00ff22; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5); border-radius: 8px; }
+    #status { margin-top: 15px; font-weight: bold; font-size: 18px; color: #2b6cb0; min-height: 25px; }
+    .btn { background: #2b6cb0; color: white; border: none; padding: 15px 30px; font-size: 18px; font-weight: bold; border-radius: 8px; margin-top: 15px; width: 85%; max-width: 320px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .btn:active { background: #2c5282; transform: scale(0.98); }
+    #last-scanned { margin-top: 20px; font-size: 16px; color: #2d3748; background: #fff; padding: 12px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: inline-block; width: 80%; }
+  </style>
+</head>
+<body>
+
+  <h2>SANTOSH DIESEL & TURBO</h2>
+  <p>Part Number ko green box ke andar rakhein aur Scan karein</p>
+
+  <div id="video-container">
+    <video id="webcam" autoplay playsinline></video>
+    <div class="scan-box"></div>
+  </div>
+
+  <button class="btn" onclick="captureAndScan()">SCAN PART NUMBER</button>
+  
+  <div id="status">Ready To Scan</div>
+  <div id="last-scanned">Last Entry: <strong>None</strong></div>
+
+  <script>
+    const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxEXZJdCd4Me6JLLRcQLXVoXPsyciU2HcZKt67iu0hdJPyZ1gfxgHKHWMpgYpvK_7oS/exec"; 
+
+    const video = document.getElementById('webcam');
+    const statusDiv = document.getElementById('status');
+    const lastScannedDiv = document.getElementById('last-scanned');
+
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      .then(stream => { video.srcObject = stream; })
+      .catch(err => { statusDiv.innerText = "Camera Permission Denied"; });
+
+    async function captureAndScan() {
+      statusDiv.innerText = "Scanning Text...";
+      
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      Tesseract.recognize(canvas, 'eng')
+        .then(({ data: { text } }) => {
+          let cleanedText = text.replace(/[^a-zA-Z0-9\s-]/g, '').trim();
+          
+          if (cleanedText.length > 2) {
+            statusDiv.innerText = "Found: " + cleanedText + " | Saving...";
+            saveToGoogleSheet(cleanedText);
+          } else {
+            statusDiv.innerText = "Text Read Nahi Hua! Re-try karein.";
+          }
+        })
+        .catch(err => {
+          statusDiv.innerText = "Scanning Error";
+        });
+    }
+
+    function saveToGoogleSheet(partNumber) {
+      fetch(GOOGLE_SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ partNumber: partNumber })
+      }).then(() => {
+        statusDiv.innerText = "✅ Saved Successfully!";
+        lastScannedDiv.innerHTML = "Last Entry: <strong>" + partNumber + " (Qty: 1)</strong>";
+      }).catch(err => {
+        statusDiv.innerText = "❌ Save Failed";
+      });
+    }
+  </script>
+</body>
+</html>
